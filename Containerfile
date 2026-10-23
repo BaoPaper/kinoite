@@ -17,14 +17,10 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/y
         helix \
         kitty \
         tailscale \
-        webkit2gtk4.1 \
-        android-tools \
         syncthing \
         chezmoi \
-        uv \
         just \
         btop \
-        pnpm \
         fastfetch \
         trash-cli && \
     dnf clean all && \

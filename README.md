@@ -11,31 +11,16 @@ sudo rpm-ostree rebase ostree-unverified-registry:docker://ghcr.io/baopaper/kino
 sudo systemctl reboot
 ```
 
-## 补上签名验证（首次切换后）
+## 切到签名 transport（首次切换后）
 
 首次 `rpm-ostree rebase` 后 origin 是 `ostree-unverified-registry:`，之后升级不再验签。
-确认要长期使用后，补上严格策略并切到签名 transport（镜像已在本地，不会重新下载）：
+确认要长期使用后，切到签名 transport 即可。镜像内已经自带验签配置，不需要再手写 policy：
+
+- `/etc/containers/policy.json`：只对 `ghcr.io/baopaper/kinoite` 强制 sigstore 验签，其余镜像默认放行，避免影响 distrobox / podman 日常拉取
+- `/etc/pki/containers/baopaper.pub`：验签公钥
+- `/etc/containers/registries.d/ghcr.yaml`：启用 `use-sigstore-attachments`
 
 ```bash
-sudo tee /etc/containers/policy.json >/dev/null <<'EOF'
-{
-  "default": [{ "type": "reject" }],
-  "transports": {
-    "docker": {
-      "ghcr.io/baopaper/kinoite": [
-        { "type": "sigstoreSigned", "keyPath": "/etc/pki/containers/baopaper.pub",
-          "signedIdentity": { "type": "matchRepository" } }
-      ],
-      "ghcr.io": [{ "type": "insecureAcceptAnything" }],
-      "docker.io": [{ "type": "insecureAcceptAnything" }],
-      "quay.io": [{ "type": "insecureAcceptAnything" }],
-      "registry.fedoraproject.org": [{ "type": "insecureAcceptAnything" }]
-    },
-    "containers-storage": { "": [{ "type": "insecureAcceptAnything" }] }
-  }
-}
-EOF
-
 sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/baopaper/kinoite:44
 sudo systemctl reboot
 ```
