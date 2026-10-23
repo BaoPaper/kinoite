@@ -1,0 +1,5 @@
+# containers/image 默认只在本地 lookaside 目录找 cosign 签名，不会去 registry 里读
+# sha256-<digest>.sig。开启后，policy.json 里的 sigstoreSigned 规则才能生效。
+docker:
+  ghcr.io/baopaper/kinoite:
+    use-sigstore-attachments: true

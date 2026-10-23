@@ -8,6 +8,8 @@ LABEL org.opencontainers.image.title="kinoite" \
 # 1. 注入你的防篡改公钥与签名验证策略
 COPY cosign.pub /etc/pki/containers/baopaper.pub
 COPY policy.json /etc/containers/policy.json
+# 让 containers/image 去 registry 读取 cosign 签名（默认不读，会导致验签报“无签名”）
+COPY ghcr-sigstore.yaml /etc/containers/registries.d/ghcr.yaml
 
 # 2. 添加 Tailscale 官方源
 RUN curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/yum.repos.d/tailscale.repo
