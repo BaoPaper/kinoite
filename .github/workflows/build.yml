@@ -81,3 +81,8 @@ jobs:
         run: |
           IMAGE_WITH_DIGEST="${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.push_image.outputs.digest }}"
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY "${IMAGE_WITH_DIGEST}"
+
+      - name: 7. 回读校验签名（签名失败立即报错，避免推出无法更新的镜像）
+        run: |
+          IMAGE_WITH_DIGEST="${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.push_image.outputs.digest }}"
+          cosign verify --key cosign.pub "${IMAGE_WITH_DIGEST}"
