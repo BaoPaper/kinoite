@@ -40,25 +40,6 @@ jobs:
           echo "IMAGE_REGISTRY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
           echo "REGISTRY_AUTH_FILE=$HOME/.docker/config.json" >> "$GITHUB_ENV"
 
-      - name: 1.2 释放 Runner 磁盘空间
-        # ubuntu-latest 默认只有约 14GB 可用空间，Kinoite 基础镜像 + dnf 安装容易触发
-        # "no space left on device"。这里删掉构建用不到的大型预装工具链。
-        run: |
-          echo "== 清理前 =="
-          df -h /
-          sudo rm -rf \
-            /usr/local/lib/android \
-            /usr/share/dotnet \
-            /opt/ghc \
-            /opt/hostedtoolcache/CodeQL \
-            /usr/local/share/boost \
-            /opt/az \
-            /usr/share/swift
-          sudo apt-get clean
-          sudo rm -rf /var/lib/apt/lists/*
-          echo "== 清理后 =="
-          df -h /
-
       - name: 2. 安装 Cosign 签名工具
         uses: sigstore/cosign-installer@v3
 

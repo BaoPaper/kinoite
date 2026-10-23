@@ -1,9 +1,2 @@
-# containers/image 默认不去 registry 读取 cosign 签名（sha256-<digest>.sig），
-# 只在本地 lookaside 目录找，于是 policy.json 的 sigstoreSigned 会报“无签名”。
-#
-# 这里必须用 default-docker，而不是按 ghcr.io 写死 key：
-# 签名配置是按「实际拉取的地址」查的，配了 registry mirror 后会变成镜像站域名
-# （例如 ghcr.nju.edu.cn），按 ghcr.io 写的条目就匹配不上。
-# 代价仅限于“策略要求验签时才会去找附件”，默认放行策略下没有其他影响。
 default-docker:
   use-sigstore-attachments: true
