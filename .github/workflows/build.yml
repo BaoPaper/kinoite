@@ -9,7 +9,8 @@ on:
   workflow_dispatch: # 允许在 GitHub 网页上手动点击按钮触发构建
 
 env:
-  IMAGE_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  # 注意：容器镜像仓库名必须全小写，而 GitHub 用户名允许大写（如 BaoPaper）。
+  # 所以这里不写死 ghcr.io/${{ github.repository_owner }}，而是在下面的步骤里转成小写。
   IMAGE_NAME: kinoite
   IMAGE_TAG: "44"
 
@@ -25,30 +26,58 @@ jobs:
       - name: 1. 检出仓库代码
         uses: actions/checkout@v4
 
+      - name: 1.1 生成全小写的镜像地址与认证文件路径
+        # GHCR 要求 repository name 全小写；github.repository_owner 会保留原始大小写
+        # REGISTRY_AUTH_FILE：让 podman 使用 ~/.docker/config.json，
+        # 这样后面的 cosign 也能读到同一份登录凭据（cosign 不读 podman 默认的 auth.json）
+        run: |
+          mkdir -p "$HOME/.docker"
+          echo "IMAGE_REGISTRY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
+          echo "REGISTRY_AUTH_FILE=$HOME/.docker/config.json" >> "$GITHUB_ENV"
+
+      - name: 1.2 释放 Runner 磁盘空间
+        # ubuntu-latest 默认只有约 14GB 可用空间，Kinoite 基础镜像 + dnf 安装容易触发
+        # "no space left on device"。这里删掉构建用不到的大型预装工具链。
+        run: |
+          echo "== 清理前 =="
+          df -h /
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            /opt/az \
+            /usr/share/swift
+          sudo apt-get clean
+          sudo rm -rf /var/lib/apt/lists/*
+          echo "== 清理后 =="
+          df -h /
+
       - name: 2. 安装 Cosign 签名工具
         uses: sigstore/cosign-installer@v3
 
       - name: 3. 登录 GitHub Container Registry (GHCR)
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: 4. 使用 Podman 编译系统镜像
         run: |
-          FULL_IMAGE="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           podman build --pull=always -f Containerfile -t "${FULL_IMAGE}" .
 
       - name: 5. 推送镜像到 GHCR 并获取唯一哈希摘要 (Digest)
         id: push_image
         run: |
-          FULL_IMAGE="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_TAG }}"
+          FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           podman push --digestfile=/tmp/digest.txt "${FULL_IMAGE}"
           DIGEST=$(cat /tmp/digest.txt)
-          echo "digest=${DIGEST}" >> $GITHUB_OUTPUT
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
       - name: 6. 使用私钥对镜像进行防篡改加密签名
         env:
           COSIGN_PASSWORD: ""
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
         run: |
-          IMAGE_WITH_DIGEST="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.push_image.outputs.digest }}"
+          IMAGE_WITH_DIGEST="${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.push_image.outputs.digest }}"
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY "${IMAGE_WITH_DIGEST}"
