@@ -8,6 +8,11 @@ on:
     - cron: '0 22 * * *'
   workflow_dispatch: # 允许在 GitHub 网页上手动点击按钮触发构建
 
+# 同一个分支的构建串行执行，避免 cron 和 push 同时推送 :44 造成 tag 竞争
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   # 注意：容器镜像仓库名必须全小写，而 GitHub 用户名允许大写（如 BaoPaper）。
   # 所以这里不写死 ghcr.io/${{ github.repository_owner }}，而是在下面的步骤里转成小写。
@@ -66,13 +71,24 @@ jobs:
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           podman build --pull=always -f Containerfile -t "${FULL_IMAGE}" .
 
-      - name: 5. 推送镜像到 GHCR 并获取唯一哈希摘要 (Digest)
+      - name: 5. 先推送到带日期的一次性 tag（不动 :44）
+        # 目的：只有签名 + 验签都通过后，才移动 :44。
+        # 否则中途失败会把 :44 指向一个没有签名的镜像，客户端 bootc upgrade 会直接报验签失败。
         id: push_image
         run: |
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-          podman push --digestfile=/tmp/digest.txt "${FULL_IMAGE}"
-          DIGEST=$(cat /tmp/digest.txt)
-          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+          DATE_TAG="${IMAGE_TAG}-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
+          DATE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DATE_TAG}"
+          podman tag "${FULL_IMAGE}" "${DATE_IMAGE}"
+          podman push --digestfile=/tmp/digest.txt "${DATE_IMAGE}"
+          echo "digest=$(cat /tmp/digest.txt)" >> "$GITHUB_OUTPUT"
+          echo "date_tag=${DATE_TAG}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### 本次构建"
+            echo ""
+            echo "- 版本 tag: \`${DATE_TAG}\`"
+            echo "- digest: \`$(cat /tmp/digest.txt)\`"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: 6. 使用私钥对镜像进行防篡改加密签名
         env:
@@ -82,7 +98,11 @@ jobs:
           IMAGE_WITH_DIGEST="${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.push_image.outputs.digest }}"
           cosign sign --yes --key env://COSIGN_PRIVATE_KEY "${IMAGE_WITH_DIGEST}"
 
-      - name: 7. 回读校验签名（签名失败立即报错，避免推出无法更新的镜像）
+      - name: 7. 回读校验签名
         run: |
           IMAGE_WITH_DIGEST="${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.push_image.outputs.digest }}"
           cosign verify --key cosign.pub "${IMAGE_WITH_DIGEST}"
+
+      - name: 8. 验签通过后才移动 :44 tag
+        run: |
+          podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"

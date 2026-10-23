@@ -1,5 +1,5 @@
 {
-  "default": [{ "type": "reject" }],
+  "default": [{ "type": "insecureAcceptAnything" }],
   "transports": {
     "docker": {
       "ghcr.io/baopaper/kinoite": [
@@ -8,12 +8,7 @@
           "keyPath": "/etc/pki/containers/baopaper.pub",
           "signedIdentity": { "type": "matchRepository" }
         }
-      ],
-      "ghcr.io":                    [{ "type": "insecureAcceptAnything" }],
-      "docker.io":                  [{ "type": "insecureAcceptAnything" }],
-      "quay.io":                    [{ "type": "insecureAcceptAnything" }],
-      "registry.fedoraproject.org": [{ "type": "insecureAcceptAnything" }]
-    },
-    "containers-storage": { "": [{ "type": "insecureAcceptAnything" }] }
+      ]
+    }
   }
 }

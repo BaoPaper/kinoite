@@ -1,5 +1,10 @@
 FROM quay.io/fedora/fedora-kinoite:44
 
+# 供 GHCR 把镜像关联到仓库页面（Packages 里能直接跳转源码）
+LABEL org.opencontainers.image.title="kinoite" \
+      org.opencontainers.image.description="Fedora Kinoite 44 + Tailscale / fcitx5-rime / distrobox" \
+      org.opencontainers.image.source="https://github.com/BaoPaper/kinoite"
+
 # 1. 注入你的防篡改公钥与签名验证策略
 COPY cosign.pub /etc/pki/containers/baopaper.pub
 COPY policy.json /etc/containers/policy.json
