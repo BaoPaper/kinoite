@@ -1,6 +1,6 @@
 # kinoite
 
-基于 Fedora Kinoite 的自用 bootc 镜像，预装 tailscale、fcitx5-rime、distrobox 等。
+基于 Fedora Kinoite 的自用 bootc 镜像，预装 tailscale、fcitx5-rime、distrobox、完整 ffmpeg 与 VA-API 硬件解码驱动等。
 
 镜像：`ghcr.io/baopaper/kinoite:44`（每次构建都用 cosign 签名）
 
