@@ -19,8 +19,6 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/y
         kitty \
         tailscale \
         syncthing \
-        chezmoi \
-        just \
         btop \
         fastfetch \
         trash-cli \
