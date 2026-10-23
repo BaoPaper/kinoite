@@ -52,6 +52,17 @@ jobs:
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           podman build --pull=always -f Containerfile -t "${FULL_IMAGE}" .
 
+      - name: 4.5 使用 bootc-base-imagectl 进行 Rechunking
+        run: |
+          FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          podman run --rm --privileged \
+            -v /tmp/chunked-output:/output \
+            "${FULL_IMAGE}" \
+            bootc-base-imagectl rechunk \
+              --output oci:/output/image:chunked
+          podman pull oci:/output/image:chunked
+          podman tag $(podman images --format "{{.ID}}" oci:/output/image:chunked) "${FULL_IMAGE}"
+
       - name: 5. 先推送到带日期的一次性 tag（不动 :44）
         # 目的：只有签名 + 验签都通过后，才移动 :44。
         # 否则中途失败会把 :44 指向一个没有签名的镜像，客户端 bootc upgrade 会直接报验签失败。
