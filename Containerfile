@@ -33,6 +33,6 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/y
         libva-utils && \
     dnf swap -y --allowerasing mesa-vulkan-drivers mesa-vulkan-drivers-freeworld && \
     dnf clean all && \
-    rm -rf /var/cache/libdnf5 /var/lib/dnf /run/dnf /var/log/dnf* /tmp/*
+    rm -rf /var/cache/* /var/lib/dnf /run/dnf /var/log/dnf* /tmp/*
 
 RUN bootc container lint
