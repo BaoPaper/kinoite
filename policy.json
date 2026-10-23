@@ -1,5 +1,5 @@
 {
-  "default": [{ "type": "insecureAcceptAnything" }],
+  "default": [{ "type": "reject" }],
   "transports": {
     "docker": {
       "ghcr.io/baopaper/kinoite": [
@@ -8,7 +8,16 @@
           "keyPath": "/etc/pki/containers/baopaper.pub",
           "signedIdentity": { "type": "matchRepository" }
         }
-      ]
-    }
+      ],
+      "": [{ "type": "insecureAcceptAnything" }]
+    },
+    "docker-daemon": { "": [{ "type": "insecureAcceptAnything" }] },
+    "atomic": { "": [{ "type": "insecureAcceptAnything" }] },
+    "containers-storage": { "": [{ "type": "insecureAcceptAnything" }] },
+    "dir": { "": [{ "type": "insecureAcceptAnything" }] },
+    "oci": { "": [{ "type": "insecureAcceptAnything" }] },
+    "oci-archive": { "": [{ "type": "insecureAcceptAnything" }] },
+    "docker-archive": { "": [{ "type": "insecureAcceptAnything" }] },
+    "tarball": { "": [{ "type": "insecureAcceptAnything" }] }
   }
 }
