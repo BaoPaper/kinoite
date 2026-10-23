@@ -52,16 +52,38 @@ jobs:
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           podman build --pull=always -f Containerfile -t "${FULL_IMAGE}" .
 
-      - name: 4.5 使用 bootc-base-imagectl 进行 Rechunking
+      - name: 4.5 使用 chunkah 进行 Rechunking
         run: |
+          set -euo pipefail
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-          podman run --rm --privileged \
-            -v /tmp/chunked-output:/output \
-            "${FULL_IMAGE}" \
-            bootc-base-imagectl rechunk \
-              --output oci:/output/image:chunked
-          podman pull oci:/output/image:chunked
-          podman tag $(podman images --format "{{.ID}}" oci:/output/image:chunked) "${FULL_IMAGE}"
+          # 固定版本，避免 chunkah 上游更新导致构建行为漂移；升级时同步改这里。
+          CHUNKAH_IMAGE="quay.io/coreos/chunkah:latest"
+          CHUNKAH_CONFIG="$(mktemp)"
+          CHUNKAH_OUTPUT_DIR="$(mktemp -d)"
+          trap 'rm -f "${CHUNKAH_CONFIG}"; rm -rf "${CHUNKAH_OUTPUT_DIR}"' EXIT
+
+          OLD_IMAGE_ID="$(podman inspect --format '{{.Id}}' "${FULL_IMAGE}")"
+          podman inspect "${FULL_IMAGE}" > "${CHUNKAH_CONFIG}"
+
+          podman run --rm \
+            --mount=type=image,src="${FULL_IMAGE}",target=/chunkah \
+            -v "${CHUNKAH_CONFIG}:/chunkah-config.json:ro" \
+            -v "${CHUNKAH_OUTPUT_DIR}:/run/out" \
+            "${CHUNKAH_IMAGE}" \
+            build \
+              --verbose \
+              --compressed \
+              --max-layers 256 \
+              --prune /sysroot/ \
+              --label ostree.commit- \
+              --label ostree.final-diffid- \
+              --config /chunkah-config.json \
+              --output oci:/run/out/chunked
+
+          CHUNKED_IMAGE="$(podman pull "oci:${CHUNKAH_OUTPUT_DIR}/chunked")"
+          podman tag "${CHUNKED_IMAGE}" "${FULL_IMAGE}"
+          # 释放未 rechunk 的旧镜像，避免 Runner 磁盘被两份完整镜像占满
+          podman rmi "${OLD_IMAGE_ID}" || true
 
       - name: 5. 先推送到带日期的一次性 tag（不动 :44）
         # 目的：只有签名 + 验签都通过后，才移动 :44。
