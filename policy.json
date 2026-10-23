@@ -1,0 +1,20 @@
+{
+  "default": [
+    {
+      "type": "insecureAcceptAnything"
+    }
+  ],
+  "transports": {
+    "docker": {
+      "ghcr.io/baopaper/kinoite": [
+        {
+          "type": "sigstoreSigned",
+          "keyPath": "/etc/pki/containers/baopaper.pub",
+          "signedIdentity": {
+            "type": "matchRepository"
+          }
+        }
+      ]
+    }
+  }
+}
