@@ -48,10 +48,19 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       - name: 4. 使用 Podman 编译系统镜像
-        # --retry 5：quay.io CDN 偶发中途断流（unexpected EOF），多试几次
         run: |
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-          podman build --pull=always --retry 5 -f Containerfile -t "${FULL_IMAGE}" .
+          BASE_IMAGE="quay.io/fedora/fedora-kinoite:${IMAGE_TAG}"
+          for i in {1..3}; do
+            if podman pull --retry 5 --retry-delay 10s "${BASE_IMAGE}"; then
+              break
+            fi
+            if [ "$i" -eq 3 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
+          podman build -f Containerfile -t "${FULL_IMAGE}" .
 
       - name: 4.5 使用 chunkah 进行 Rechunking
         run: |
