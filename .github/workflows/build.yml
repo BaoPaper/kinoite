@@ -19,8 +19,6 @@ env:
   # 所以在下面的步骤里转小写，不在这里写死
   IMAGE_NAME: kinoite
   IMAGE_TAG: "44"
-  # 构建时需要从网上下载的两个上游镜像，缓存步骤也复用这两个变量
-  BASE_IMAGE: quay.io/fedora/fedora-kinoite:44
   CHUNKAH_IMAGE: quay.io/coreos/chunkah:latest
 
 jobs:
@@ -30,7 +28,6 @@ jobs:
       contents: read
       packages: write # 推送 GHCR
       id-token: write
-      actions: write # 删除旧 Actions 缓存，保证镜像缓存只留一份
 
     steps:
       - name: 1. 检出仓库代码
@@ -42,8 +39,6 @@ jobs:
           mkdir -p "$HOME/.docker"
           echo "IMAGE_REGISTRY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
           echo "REGISTRY_AUTH_FILE=$HOME/.docker/config.json" >> "$GITHUB_ENV"
-          # 缓存目录必须在仓库目录外，否则会被当成 build context 打进镜像
-          echo "IMAGE_CACHE_DIR=${RUNNER_TEMP}/podman-image-cache" >> "$GITHUB_ENV"
 
       - name: 2. 安装 Cosign 签名工具
         uses: sigstore/cosign-installer@v3
@@ -51,52 +46,6 @@ jobs:
       - name: 3. 登录 GitHub Container Registry (GHCR)
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-
-      - name: 3.5 恢复上一次的镜像缓存
-        # key 带 run_id 所以永不命中同一条，靠 restore-keys 取最近一份；保存由 post 步骤完成
-        uses: actions/cache@v4
-        continue-on-error: true
-        with:
-          path: ${{ runner.temp }}/podman-image-cache
-          key: podman-images-${{ github.run_id }}
-          restore-keys: |
-            podman-images-
-
-      - name: 3.6 把缓存里的镜像装回本地 podman 存储
-        # 只省掉已有图层的下载；--pull=always 仍会核对 manifest，镜像不会因此变旧
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          mkdir -p "${IMAGE_CACHE_DIR}"
-          rm -f "${IMAGE_CACHE_DIR}"/*.tmp
-          for tar in "${IMAGE_CACHE_DIR}/base.tar" "${IMAGE_CACHE_DIR}/chunkah.tar"; do
-            if [ -f "${tar}" ]; then
-              echo "==> podman load ${tar}"
-              podman load -i "${tar}"
-            else
-              echo "==> 无缓存 ${tar}，本次直拉"
-            fi
-          done
-
-      - name: 3.7 删掉历史缓存条目
-        # key 里带 run_id，不清理就会每天新增一条撑爆 10GB 配额；
-        # 这里清空所有 podman-images-*，本次结束再存一份，仓库里恒为 1 条。
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-        run: |
-          set -euo pipefail
-          ids=$(gh cache list --limit 100 --json id,key \
-            --jq '.[] | select(.key | startswith("podman-images-")) | .id')
-          if [ -z "${ids}" ]; then
-            echo "没有历史镜像缓存需要清理"
-            exit 0
-          fi
-          for id in ${ids}; do
-            echo "删除旧缓存 id=${id}"
-            gh cache delete "${id}" || true
-          done
 
       - name: 4. 使用 Podman 编译系统镜像
         # --retry 5：quay.io CDN 偶发中途断流（unexpected EOF），多试几次
@@ -139,19 +88,6 @@ jobs:
           podman tag "${CHUNKED_IMAGE}" "${FULL_IMAGE}"
           # 释放未 rechunk 的旧镜像，避免 Runner 磁盘被两份完整镜像占满
           podman rmi "${OLD_IMAGE_ID}" || true
-
-      - name: 4.6 导出本次用到的上游镜像，供下次复用
-        # 只导出从网上拉的两个镜像；自建镜像每次都不同且 5GB+，缓存没意义。
-        # 先写 .tmp 再 mv，避免中途失败给下次留下半个 tar 包。
-        continue-on-error: true
-        run: |
-          set -euo pipefail
-          mkdir -p "${IMAGE_CACHE_DIR}"
-          podman save -o "${IMAGE_CACHE_DIR}/base.tar.tmp" "${BASE_IMAGE}"
-          mv "${IMAGE_CACHE_DIR}/base.tar.tmp" "${IMAGE_CACHE_DIR}/base.tar"
-          podman save -o "${IMAGE_CACHE_DIR}/chunkah.tar.tmp" "${CHUNKAH_IMAGE}"
-          mv "${IMAGE_CACHE_DIR}/chunkah.tar.tmp" "${IMAGE_CACHE_DIR}/chunkah.tar"
-          ls -lh "${IMAGE_CACHE_DIR}"
 
       - name: 5. 先推送到带日期的一次性 tag（不动 :44）
         # 必须等签名 + 验签都通过才移动 :44，否则客户端 bootc upgrade 会验签失败
