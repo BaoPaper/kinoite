@@ -65,6 +65,15 @@ jobs:
       - name: 4.5 使用 chunkah 进行 Rechunking
         run: |
           set -euo pipefail
+          for i in {1..5}; do
+            if podman pull "${CHUNKAH_IMAGE}"; then
+              break
+            fi
+            if [ "$i" -eq 5 ]; then
+              exit 1
+            fi
+            sleep 15
+          done
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           # 固定时间戳（2025-01-01T00:00:00Z），必须写死、不能用构建当天日期：
           # 把无已知构建时间的文件（/usr/lib/.build-id、/usr/share/locale、/var 等）
