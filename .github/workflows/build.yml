@@ -75,10 +75,7 @@ jobs:
             sleep 15
           done
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-          # 固定时间戳（2025-01-01T00:00:00Z），必须写死、不能用构建当天日期：
-          # 把无已知构建时间的文件（/usr/lib/.build-id、/usr/share/locale、/var 等）
-          # mtime 钳到固定值，否则每次构建都不同，会让所有引用它们的层 digest 全变。
-          SOURCE_DATE_EPOCH=1735689600
+          SOURCE_DATE_EPOCH=$(git log -1 --pretty=%ct)
           CHUNKAH_CONFIG="$(mktemp)"
           CHUNKAH_OUTPUT_DIR="$(mktemp -d)"
           trap 'rm -f "${CHUNKAH_CONFIG}"; rm -rf "${CHUNKAH_OUTPUT_DIR}"' EXIT
