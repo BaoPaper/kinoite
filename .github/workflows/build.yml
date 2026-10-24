@@ -4,46 +4,46 @@ on:
   push:
     branches: [ main, master ]
   schedule:
-    # 每天北京时间 12:43 (UTC 04:43) 自动拉取 Fedora 官方安全更新并重新构建。
-    # 时间选择说明：
-    #   1. 分钟不取 0/15/30/45 —— GitHub 官方文档说明 schedule 不保证准时，
-    #      整点（尤其 0 分）负载最高，运行会被延迟甚至直接丢弃。
-    #   2. 小时取 UTC 04 点 —— 此时欧美都处于凌晨、亚洲已过上班高峰，是
-    #      GitHub Actions 全局负载的低谷，被延迟的概率最小。
+    # 每天北京时间 12:43 (UTC 04:43)。故意不取整点、不取 0 分：
+    # GitHub 的 schedule 在整点负载最高，运行会被延迟甚至直接丢弃。
     - cron: '43 4 * * *'
-  workflow_dispatch: # 允许在 GitHub 网页上手动点击按钮触发构建
+  workflow_dispatch:
 
-# 同一个分支的构建串行执行，避免 cron 和 push 同时推送 :44 造成 tag 竞争
+# 同分支串行，避免 cron 和 push 同时推 :44
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: false
 
 env:
-  # 注意：容器镜像仓库名必须全小写，而 GitHub 用户名允许大写（如 BaoPaper）。
-  # 所以这里不写死 ghcr.io/${{ github.repository_owner }}，而是在下面的步骤里转成小写。
+  # 镜像仓库名必须全小写，而 github.repository_owner 会保留原始大小写（如 BaoPaper），
+  # 所以在下面的步骤里转小写，不在这里写死
   IMAGE_NAME: kinoite
   IMAGE_TAG: "44"
+  # 构建时需要从网上下载的两个上游镜像，缓存步骤也复用这两个变量
+  BASE_IMAGE: quay.io/fedora/fedora-kinoite:44
+  CHUNKAH_IMAGE: quay.io/coreos/chunkah:latest
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write # 允许推送到 GitHub 容器注册表 (GHCR)
+      packages: write # 推送 GHCR
       id-token: write
+      actions: write # 删除旧 Actions 缓存，保证镜像缓存只留一份
 
     steps:
       - name: 1. 检出仓库代码
         uses: actions/checkout@v4
 
       - name: 1.1 生成全小写的镜像地址与认证文件路径
-        # GHCR 要求 repository name 全小写；github.repository_owner 会保留原始大小写
-        # REGISTRY_AUTH_FILE：让 podman 使用 ~/.docker/config.json，
-        # 这样后面的 cosign 也能读到同一份登录凭据（cosign 不读 podman 默认的 auth.json）
+        # REGISTRY_AUTH_FILE 让 podman 用 ~/.docker/config.json，cosign 也能读到同一份凭据
         run: |
           mkdir -p "$HOME/.docker"
           echo "IMAGE_REGISTRY=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_ENV"
           echo "REGISTRY_AUTH_FILE=$HOME/.docker/config.json" >> "$GITHUB_ENV"
+          # 缓存目录必须在仓库目录外，否则会被当成 build context 打进镜像
+          echo "IMAGE_CACHE_DIR=${RUNNER_TEMP}/podman-image-cache" >> "$GITHUB_ENV"
 
       - name: 2. 安装 Cosign 签名工具
         uses: sigstore/cosign-installer@v3
@@ -52,22 +52,65 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: 3.5 恢复上一次的镜像缓存
+        # key 带 run_id 所以永不命中同一条，靠 restore-keys 取最近一份；保存由 post 步骤完成
+        uses: actions/cache@v4
+        continue-on-error: true
+        with:
+          path: ${{ runner.temp }}/podman-image-cache
+          key: podman-images-${{ github.run_id }}
+          restore-keys: |
+            podman-images-
+
+      - name: 3.6 把缓存里的镜像装回本地 podman 存储
+        # 只省掉已有图层的下载；--pull=always 仍会核对 manifest，镜像不会因此变旧
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p "${IMAGE_CACHE_DIR}"
+          rm -f "${IMAGE_CACHE_DIR}"/*.tmp
+          for tar in "${IMAGE_CACHE_DIR}/base.tar" "${IMAGE_CACHE_DIR}/chunkah.tar"; do
+            if [ -f "${tar}" ]; then
+              echo "==> podman load ${tar}"
+              podman load -i "${tar}"
+            else
+              echo "==> 无缓存 ${tar}，本次直拉"
+            fi
+          done
+
+      - name: 3.7 删掉历史缓存条目
+        # key 里带 run_id，不清理就会每天新增一条撑爆 10GB 配额；
+        # 这里清空所有 podman-images-*，本次结束再存一份，仓库里恒为 1 条。
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          ids=$(gh cache list --limit 100 --json id,key \
+            --jq '.[] | select(.key | startswith("podman-images-")) | .id')
+          if [ -z "${ids}" ]; then
+            echo "没有历史镜像缓存需要清理"
+            exit 0
+          fi
+          for id in ${ids}; do
+            echo "删除旧缓存 id=${id}"
+            gh cache delete "${id}" || true
+          done
+
       - name: 4. 使用 Podman 编译系统镜像
+        # --retry 5：quay.io CDN 偶发中途断流（unexpected EOF），多试几次
         run: |
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-          podman build --pull=always -f Containerfile -t "${FULL_IMAGE}" .
+          podman build --pull=always --retry 5 -f Containerfile -t "${FULL_IMAGE}" .
 
       - name: 4.5 使用 chunkah 进行 Rechunking
         run: |
           set -euo pipefail
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-          # 固定版本，避免 chunkah 上游更新导致构建行为漂移；升级时同步改这里。
-          CHUNKAH_IMAGE="quay.io/coreos/chunkah:latest"
-          # 固定时间戳（2025-01-01T00:00:00Z），必须写死、绝不能用构建当天日期。
-          # 作用：把「没有已知构建时间」的文件（运行时被 dnf 刷新的共享目录，如
-          # /usr/lib/.build-id、/usr/share/locale、/var 等）的 mtime 钳到这个值，
-          # 使每层 tar 的字节可复现。否则这些目录的 mtime 每次构建都不同，
-          # 一个共享目录变了就会让所有引用它的层 digest 全变，导致每次更新都得重下全部分层。
+          # 固定时间戳（2025-01-01T00:00:00Z），必须写死、不能用构建当天日期：
+          # 把无已知构建时间的文件（/usr/lib/.build-id、/usr/share/locale、/var 等）
+          # mtime 钳到固定值，否则每次构建都不同，会让所有引用它们的层 digest 全变。
           SOURCE_DATE_EPOCH=1735689600
           CHUNKAH_CONFIG="$(mktemp)"
           CHUNKAH_OUTPUT_DIR="$(mktemp -d)"
@@ -97,19 +140,29 @@ jobs:
           # 释放未 rechunk 的旧镜像，避免 Runner 磁盘被两份完整镜像占满
           podman rmi "${OLD_IMAGE_ID}" || true
 
+      - name: 4.6 导出本次用到的上游镜像，供下次复用
+        # 只导出从网上拉的两个镜像；自建镜像每次都不同且 5GB+，缓存没意义。
+        # 先写 .tmp 再 mv，避免中途失败给下次留下半个 tar 包。
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          mkdir -p "${IMAGE_CACHE_DIR}"
+          podman save -o "${IMAGE_CACHE_DIR}/base.tar.tmp" "${BASE_IMAGE}"
+          mv "${IMAGE_CACHE_DIR}/base.tar.tmp" "${IMAGE_CACHE_DIR}/base.tar"
+          podman save -o "${IMAGE_CACHE_DIR}/chunkah.tar.tmp" "${CHUNKAH_IMAGE}"
+          mv "${IMAGE_CACHE_DIR}/chunkah.tar.tmp" "${IMAGE_CACHE_DIR}/chunkah.tar"
+          ls -lh "${IMAGE_CACHE_DIR}"
+
       - name: 5. 先推送到带日期的一次性 tag（不动 :44）
-        # 目的：只有签名 + 验签都通过后，才移动 :44。
-        # 否则中途失败会把 :44 指向一个没有签名的镜像，客户端 bootc upgrade 会直接报验签失败。
+        # 必须等签名 + 验签都通过才移动 :44，否则客户端 bootc upgrade 会验签失败
         id: push_image
         run: |
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
           DATE_TAG="${IMAGE_TAG}-$(date -u +%Y%m%d)-${GITHUB_SHA::7}"
           DATE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DATE_TAG}"
           podman tag "${FULL_IMAGE}" "${DATE_IMAGE}"
-          # 注意：这里不要加 --compression-format=zstd。chunkah 输出的层已经是 gzip，
-          # 指定 zstd 会让 podman 把每个层「解开再压一遍」（约 5GB 数据多走两遍压缩），
-          # 而格式一致时 podman 会原样复用已压缩的 blob，CPU 和上传都能省掉。
-          # 代价仅是 gzip 比 zstd 大约 8~9%，但配上上面的 mtime 固定后，日常更新只有很小的增量。
+          # 不要加 --compression-format=zstd：chunkah 输出的层已是 gzip，
+          # 指定 zstd 会让 podman 把每层解开再压一遍（约 5GB 多走两遍压缩）。
           podman push \
             --digestfile=/tmp/digest.txt \
             "${DATE_IMAGE}"
@@ -136,6 +189,6 @@ jobs:
           cosign verify --key cosign.pub "${IMAGE_WITH_DIGEST}"
 
       - name: 8. 验签通过后才移动 :44 tag
-        # 同样不指定压缩格式：层与上一步的日期 tag 完全一致，podman 直接复用已上传的 blob
+        # 层与日期 tag 完全一致，podman 直接复用已上传的 blob
         run: |
           podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
