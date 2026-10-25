@@ -36,7 +36,7 @@ sudo rpm-ostree upgrade --check
 
 ```bash
 cosign verify \
-  --key https://raw.githubusercontent.com/BaoPaper/kinoite/main/cosign.pub \
+  --key https://raw.githubusercontent.com/BaoPaper/kinoite/main/system_files/etc/pki/containers/baopaper.pub \
   ghcr.io/baopaper/kinoite:44
 ```
 

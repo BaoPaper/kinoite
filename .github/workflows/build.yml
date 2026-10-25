@@ -137,7 +137,7 @@ jobs:
       - name: 7. 回读校验签名
         run: |
           IMAGE_WITH_DIGEST="${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.push_image.outputs.digest }}"
-          cosign verify --key cosign.pub "${IMAGE_WITH_DIGEST}"
+          cosign verify --key system_files/etc/pki/containers/baopaper.pub "${IMAGE_WITH_DIGEST}"
 
       - name: 8. 验签通过后才移动 :44 tag
         id: final_push
@@ -162,4 +162,4 @@ jobs:
             exit 1
           fi
           # 端到端确认：客户端按 tag 拉取时能验签通过
-          cosign verify --key cosign.pub "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          cosign verify --key system_files/etc/pki/containers/baopaper.pub "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
