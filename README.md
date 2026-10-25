@@ -55,6 +55,29 @@ sudo rpm-ostree rollback
 sudo systemctl reboot
 ```
 
+## 虚拟化（virt-manager / KVM）
+
+镜像已预装 `virt-manager`、`libvirt`、`qemu-kvm`、`edk2-ovmf`、`swtpm`，并启用了模块化 libvirt socket（`virtqemud.socket`、`virtnetworkd.socket` 等）。
+
+首次使用前把当前用户加入 `libvirt` 组，重新登录后生效（否则 virt-manager 连 `qemu:///system` 会反复弹认证）：
+
+```bash
+sudo usermod -aG libvirt "$USER"
+# 注销重新登录
+```
+
+然后打开 virt-manager，使用默认的 `QEMU/KVM` 系统连接即可。自检：
+
+```bash
+ls -l /dev/kvm
+virt-host-validate qemu
+virsh -c qemu:///system net-list --all   # default 网络应为 autostart
+```
+
+装 Windows 11 这类需要 UEFI + TPM 的虚拟机时，固件选 `UEFI x86_64: ... OVMF`，并添加 TPM 2.0（swtpm）。
+
+如果 Kinoite 本身跑在虚拟机里，需要宿主机开启嵌套虚拟化，否则没有 `/dev/kvm`。
+
 ## 镜像站（可选）
 
 国内拉取慢可加 registry mirror：

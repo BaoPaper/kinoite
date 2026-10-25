@@ -35,4 +35,37 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/y
     dnf clean all && \
     rm -rf /var/cache/* /var/lib/dnf /run/dnf /var/log/dnf* /tmp/*
 
+# 虚拟化：virt-manager + libvirt/QEMU (KVM)。
+# Fedora 41+ 默认使用模块化 libvirt daemon，这里显式启用 socket 激活。
+RUN dnf install -y \
+        virt-manager \
+        virt-install \
+        virt-viewer \
+        libvirt-daemon-kvm \
+        libvirt-daemon-config-network \
+        libvirt-daemon-config-nwfilter \
+        libvirt-nss \
+        edk2-ovmf \
+        swtpm \
+        swtpm-tools && \
+    systemctl enable \
+        virtqemud.socket \
+        virtnetworkd.socket \
+        virtstoraged.socket \
+        virtnodedevd.socket \
+        virtsecretd.socket \
+        virtnwfilterd.socket \
+        virtinterfaced.socket && \
+    dnf clean all && \
+    rm -rf /var/cache/* /var/lib/dnf /run/dnf /var/log/dnf* /tmp/*
+
+# bootc/ostree 安装时 /var 是新建的，libvirt 运行时目录会拿到 var_lib_t 而不是
+# virt_var_lib_t/virt_log_t，导致 VM 启动被 SELinux 拒绝。开机时校正这两个目录。
+RUN printf '%s\n' \
+        'd /var/lib/libvirt 0755 root root -' \
+        'd /var/log/libvirt 0750 root root -' \
+        'z /var/lib/libvirt - - - -' \
+        'z /var/log/libvirt - - - -' \
+        > /usr/lib/tmpfiles.d/90-libvirt-relabel.conf
+
 RUN bootc container lint --fatal-warnings --no-truncate
