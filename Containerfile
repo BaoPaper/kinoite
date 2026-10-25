@@ -23,6 +23,7 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/y
         trash-cli \
         vim \
         tmux \
+        btrfs-assistant \
         https://mirrors.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
         https://mirrors.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm && \
     dnf swap -y ffmpeg-free ffmpeg --allowerasing && \
