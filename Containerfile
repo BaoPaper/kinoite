@@ -35,4 +35,4 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/y
     dnf clean all && \
     rm -rf /var/cache/* /var/lib/dnf /run/dnf /var/log/dnf* /tmp/*
 
-RUN bootc container lint
+RUN bootc container lint --fatal-warnings --no-truncate

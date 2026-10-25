@@ -2,7 +2,7 @@ name: Build Custom Kinoite 44
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main ]
   schedule:
     # 每天北京时间 12:43 (UTC 04:43)。故意不取整点、不取 0 分：
     # GitHub 的 schedule 在整点负载最高，运行会被延迟甚至直接丢弃。
@@ -140,6 +140,26 @@ jobs:
           cosign verify --key cosign.pub "${IMAGE_WITH_DIGEST}"
 
       - name: 8. 验签通过后才移动 :44 tag
+        id: final_push
         # 层与日期 tag 完全一致，podman 直接复用已上传的 blob
         run: |
-          podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          podman push \
+            --digestfile=/tmp/final-digest.txt \
+            "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+          echo "remote_digest=$(cat /tmp/final-digest.txt)" >> "$GITHUB_OUTPUT"
+
+      - name: 9. 校验 :44 远端 digest 与已签名 digest 一致
+        # podman 首次 push 可能丢 layer annotations 导致 digest 变化，这里兜底：
+        # 如果 :44 的远端 digest 和签名的 digest 不一致，客户端升级一定验签失败
+        run: |
+          set -euo pipefail
+          SIGNED_DIGEST="${{ steps.push_image.outputs.digest }}"
+          REMOTE_DIGEST="${{ steps.final_push.outputs.remote_digest }}"
+          echo "已签名 digest: ${SIGNED_DIGEST}"
+          echo ":${IMAGE_TAG} 远端 digest: ${REMOTE_DIGEST}"
+          if [[ "${SIGNED_DIGEST}" != "${REMOTE_DIGEST}" ]]; then
+            echo "::error::远端 :${IMAGE_TAG} 的 digest 与已签名 digest 不一致，客户端升级会验签失败"
+            exit 1
+          fi
+          # 端到端确认：客户端按 tag 拉取时能验签通过
+          cosign verify --key cosign.pub "${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
