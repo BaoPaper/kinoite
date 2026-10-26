@@ -7,7 +7,7 @@
 ## 切换
 
 ```bash
-sudo rpm-ostree rebase ostree-unverified-registry:docker://ghcr.io/baopaper/kinoite:44
+sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/baopaper/kinoite:44
 sudo systemctl reboot
 ```
 
