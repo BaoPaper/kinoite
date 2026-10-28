@@ -1,4 +1,4 @@
-FROM quay.io/fedora/fedora-kinoite:44
+FROM quay.io/fedora-ostree-desktops/kinoite:44
 
 LABEL org.opencontainers.image.title="kinoite" \
       org.opencontainers.image.description="BaoPaper's Fedora Kinoite 44" \

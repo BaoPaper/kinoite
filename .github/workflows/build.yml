@@ -19,6 +19,8 @@ env:
   # 所以在下面的步骤里转小写，不在这里写死
   IMAGE_NAME: kinoite
   IMAGE_TAG: "44"
+  BASE_IMAGE_ORG: quay.io/fedora-ostree-desktops
+  BASE_IMAGE_NAME: kinoite
   CHUNKAH_IMAGE: quay.io/coreos/chunkah:latest
 
 jobs:
@@ -47,10 +49,17 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
 
+      - name: 3.5 校验基础镜像签名
+        # Fedora Atomic 的 ostree 镜像用固定公钥做 cosign 签名，
+        # 先验签再构建，避免把未签名或被替换的 base 带进最终镜像。
+        run: |
+          BASE_IMAGE="${BASE_IMAGE_ORG}/${BASE_IMAGE_NAME}:${IMAGE_TAG}"
+          cosign verify --key .github/keys/quay.io-fedora-ostree-desktops.pub "${BASE_IMAGE}"
+
       - name: 4. 使用 Podman 编译系统镜像
         run: |
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
-          BASE_IMAGE="quay.io/fedora/fedora-kinoite:${IMAGE_TAG}"
+          BASE_IMAGE="${BASE_IMAGE_ORG}/${BASE_IMAGE_NAME}:${IMAGE_TAG}"
           for i in {1..5}; do
             if podman pull "${BASE_IMAGE}"; then
               break
