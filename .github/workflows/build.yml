@@ -101,7 +101,7 @@ jobs:
               --verbose \
               --compressed \
               --source-date-epoch "${SOURCE_DATE_EPOCH}" \
-              --max-layers 128 \
+              --max-layers 256 \
               --prune /sysroot/ \
               --label ostree.commit- \
               --label ostree.final-diffid- \
