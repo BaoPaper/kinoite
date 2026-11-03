@@ -8,7 +8,9 @@ COPY system_files/usr/ /usr/
 COPY system_files/etc/ /etc/
 
 # 基础工具与 RPM Fusion 仓库；随后替换 ffmpeg 和 Mesa 驱动。
-RUN curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/yum.repos.d/tailscale.repo && \
+RUN --mount=type=tmpfs,target=/run \
+    --mount=type=tmpfs,target=/tmp \
+    curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/yum.repos.d/tailscale.repo && \
     dnf install -y \
         distrobox \
         fcitx5-rime \
@@ -33,11 +35,13 @@ RUN curl -fsSL https://pkgs.tailscale.com/stable/fedora/tailscale.repo -o /etc/y
         libva-utils && \
     dnf swap -y --allowerasing mesa-vulkan-drivers mesa-vulkan-drivers-freeworld && \
     dnf clean all && \
-    rm -rf /var/cache/* /var/lib/dnf /run/dnf /var/log/dnf* /tmp/*
+    rm -rf /var/cache/* /var/lib/dnf /var/log/dnf*
 
 # 虚拟化：virt-manager + libvirt/QEMU (KVM)。
 # Fedora 41+ 默认使用模块化 libvirt daemon，这里显式启用 socket 激活。
-RUN dnf install -y \
+RUN --mount=type=tmpfs,target=/run \
+    --mount=type=tmpfs,target=/tmp \
+    dnf install -y \
         virt-manager \
         virt-install \
         virt-viewer \
@@ -57,6 +61,6 @@ RUN dnf install -y \
         virtnwfilterd.socket \
         virtinterfaced.socket && \
     dnf clean all && \
-    rm -rf /var/cache/* /var/lib/dnf /run/dnf /run/gluster /run/selinux-policy /var/log/dnf* /tmp/*
+    rm -rf /var/cache/* /var/lib/dnf /var/log/dnf*
 
 RUN bootc container lint --fatal-warnings --no-truncate
