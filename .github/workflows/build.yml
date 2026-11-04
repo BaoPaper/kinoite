@@ -1,4 +1,4 @@
-name: Build Custom Kinoite 44
+name: Build Custom Kinoite 45
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
     - cron: '43 4 * * *'
   workflow_dispatch:
 
-# 同分支串行，避免 cron 和 push 同时推 :44
+# 同分支串行，避免 cron 和 push 同时推 :45
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: false
@@ -18,7 +18,7 @@ env:
   # 镜像仓库名必须全小写，而 github.repository_owner 会保留原始大小写（如 BaoPaper），
   # 所以在下面的步骤里转小写，不在这里写死
   IMAGE_NAME: kinoite
-  IMAGE_TAG: "44"
+  IMAGE_TAG: "45"
   BASE_IMAGE_ORG: quay.io/fedora-ostree-desktops
   BASE_IMAGE_NAME: kinoite
   CHUNKAH_IMAGE: quay.io/coreos/chunkah:latest
@@ -113,8 +113,8 @@ jobs:
           # 释放未 rechunk 的旧镜像，避免 Runner 磁盘被两份完整镜像占满
           podman rmi "${OLD_IMAGE_ID}" || true
 
-      - name: 5. 先推送到带日期的一次性 tag（不动 :44）
-        # 必须等签名 + 验签都通过才移动 :44，否则客户端 bootc upgrade 会验签失败
+      - name: 5. 先推送到带日期的一次性 tag（不动 :45）
+        # 必须等签名 + 验签都通过才移动 :45，否则客户端 bootc upgrade 会验签失败
         id: push_image
         run: |
           FULL_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
@@ -148,7 +148,7 @@ jobs:
           IMAGE_WITH_DIGEST="${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.push_image.outputs.digest }}"
           cosign verify --key system_files/etc/pki/containers/baopaper.pub "${IMAGE_WITH_DIGEST}"
 
-      - name: 8. 验签通过后才移动 :44 tag
+      - name: 8. 验签通过后才移动 :45 tag
         run: |
           set -euo pipefail
           if ! command -v skopeo >/dev/null 2>&1; then
@@ -160,7 +160,7 @@ jobs:
             "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${{ steps.push_image.outputs.digest }}" \
             "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
 
-      - name: 9. 校验 :44 远端 digest 与已签名 digest 一致
+      - name: 9. 校验 :45 远端 digest 与已签名 digest 一致
         run: |
           set -euo pipefail
           SIGNED_DIGEST="${{ steps.push_image.outputs.digest }}"

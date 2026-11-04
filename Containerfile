@@ -1,7 +1,7 @@
-FROM quay.io/fedora-ostree-desktops/kinoite:44
+FROM quay.io/fedora-ostree-desktops/kinoite:45
 
 LABEL org.opencontainers.image.title="kinoite" \
-      org.opencontainers.image.description="BaoPaper's Fedora Kinoite 44" \
+      org.opencontainers.image.description="BaoPaper's Fedora Kinoite 45" \
       org.opencontainers.image.source="https://github.com/BaoPaper/kinoite"
 
 COPY system_files/usr/ /usr/

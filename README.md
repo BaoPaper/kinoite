@@ -2,12 +2,12 @@
 
 基于 Fedora Kinoite 的自用 bootc 镜像，预装 tailscale、fcitx5-rime、distrobox、完整 ffmpeg 与 VA-API 硬件解码驱动等。
 
-镜像：`ghcr.io/baopaper/kinoite:44`（每次构建都用 cosign 签名）
+镜像：`ghcr.io/baopaper/kinoite:45`（每次构建都用 cosign 签名）
 
 ## 切换
 
 ```bash
-sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/baopaper/kinoite:44
+sudo rpm-ostree rebase ostree-unverified-registry:ghcr.io/baopaper/kinoite:45
 sudo systemctl reboot
 ```
 
@@ -21,7 +21,7 @@ sudo systemctl reboot
 - `/etc/containers/registries.d/ghcr.yaml`：启用 `use-sigstore-attachments`
 
 ```bash
-sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/baopaper/kinoite:44
+sudo rpm-ostree rebase ostree-image-signed:docker://ghcr.io/baopaper/kinoite:45
 sudo systemctl reboot
 ```
 
@@ -37,7 +37,7 @@ sudo rpm-ostree upgrade --check
 ```bash
 cosign verify \
   --key https://raw.githubusercontent.com/BaoPaper/kinoite/main/system_files/etc/pki/containers/baopaper.pub \
-  ghcr.io/baopaper/kinoite:44
+  ghcr.io/baopaper/kinoite:45
 ```
 
 ## 更新
