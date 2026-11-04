@@ -1,4 +1,4 @@
-name: Build Custom Kinoite 45
+name: Build Custom Kinoite
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
     - cron: '43 4 * * *'
   workflow_dispatch:
 
-# 同分支串行，避免 cron 和 push 同时推 :45
+# 同分支串行，避免 cron 和 push 同时推
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: false
