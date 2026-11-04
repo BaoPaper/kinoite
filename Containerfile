@@ -14,7 +14,6 @@ RUN --mount=type=tmpfs,target=/run \
     dnf install -y \
         distrobox \
         fcitx5-rime \
-        kcm-fcitx5 \
         fish \
         helix \
         kitty \
